@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add `WeActStudio420TriColorDriver` and `Display420TriColor` for the 4.2 inch B/W/R (GDEY042Z98, SSD1683) display
+- Add `fast_full_refresh`, `fast_full_update_from_buffer`, and `fast_full_update` for the 4.2 inch B/W/R display, based on GxEPD2's `_use_fast_update` for the GDEY042Z98
+
+### Fixed
+- Stop bypassing red RAM during full refresh on tri-color displays
+
 ## [0.1.2](https://github.com/avsaase/weact-studio-epd/compare/v0.1.1...v0.1.2) - 2024-09-04
 
 ### Added

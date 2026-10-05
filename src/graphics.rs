@@ -43,6 +43,8 @@ pub struct Display<const WIDTH: u32, const HEIGHT: u32, const BUFFER_SIZE: usize
 
 /// Display buffer for the WeAct Studio 4.2 inch B/W display.
 pub type Display420BlackWhite = Display<400, 300, { buffer_len::<Color>(400, 300) }, Color>;
+/// Display buffer for the WeAct Studio 4.2 inch tri-color display.
+pub type Display420TriColor = Display<400, 300, { buffer_len::<TriColor>(400, 300) }, TriColor>;
 /// Display buffer for the WeAct Studio 2.9 inch B/W display.
 pub type Display290BlackWhite = Display<128, 296, { buffer_len::<Color>(128, 296) }, Color>;
 /// Display buffer for the WeAct Studio 2.9 inch tri-color display.

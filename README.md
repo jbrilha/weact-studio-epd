@@ -16,10 +16,16 @@ By default this driver uses `async`. If you prefer to use a blocking API instead
 | WeAct 2.9 inch 128x296 B/W | Black, White | ✓ | ✓ | ✓ | ✓ |
 | WeAct 2.9 inch 128x296 B/W/R | Black, White, Red | ✓ |  | ✕ | ✓ |
 | WeAct 4.2 inch 400x300 B/W | Black, White | ✓ | ✓ | ✓ | ✓ |
+| WeAct 4.2 inch 400x300 B/W/R | Black, White, Red | ✓ |  | ✕[^3] |  |
 
 [^1]: Allows updating part of the screen buffer to save IO time and potentially memory.
 
 [^2]: Refresh the screen without flickering the screen a few times.
+
+[^3]: Supports a _faster_ full refresh (`fast_full_update`) that uses the 
+high-temperature waveform based on [GxEPD2's driver](https://github.com/ZinggJM/GxEPD2/blob/master/src/gdey3c/GxEPD2_420c_GDEY042Z98.cpp)
+for this same board. The whole screen still flickers, and red renders slightly
+darker, but it's about half the refresh time.
 
 ## Examples
 

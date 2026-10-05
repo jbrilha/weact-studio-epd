@@ -6,6 +6,7 @@ mod commands {
     pub const DATA_ENTRY_MODE: u8 = 0x11;
     pub const SW_RESET: u8 = 0x12;
     pub const TEMP_CONTROL: u8 = 0x18;
+    pub const WRITE_TEMP_REGISTER: u8 = 0x1A;
     pub const MASTER_ACTIVATE: u8 = 0x20;
     pub const DISPLAY_UPDATE_CONTROL: u8 = 0x21;
     pub const UPDATE_DISPLAY_CTRL2: u8 = 0x22;

@@ -23,6 +23,9 @@ use crate::{
 /// Display driver for the WeAct Studio 4.2 inch B/W display.
 pub type WeActStudio420BlackWhiteDriver<DI, BSY, RST, DELAY> =
     DisplayDriver<DI, BSY, RST, DELAY, 400, 400, 300, Color>;
+/// Display driver for the WeAct Studio 4.2 inch Tri-Color display.
+pub type WeActStudio420TriColorDriver<DI, BSY, RST, DELAY> =
+    DisplayDriver<DI, BSY, RST, DELAY, 400, 400, 300, TriColor>;
 /// Display driver for the WeAct Studio 2.9 inch B/W display.
 pub type WeActStudio290BlackWhiteDriver<DI, BSY, RST, DELAY> =
     DisplayDriver<DI, BSY, RST, DELAY, 128, 128, 296, Color>;
@@ -80,9 +83,10 @@ where
     C: ColorType,
 {
     const RESET_DELAY_MS: u32 = 50;
-    // The 4.2-inch GDEY042T81 uses SSD1683 OTP waveforms, unlike the
-    // smaller SSD1680 panels. Keep their existing LUT path separate.
-    const IS_SSD1683: bool = WIDTH == 400 && HEIGHT == 300 && C::BUFFER_COUNT == 1;
+    // the 4.2-inch GDEY042T81 and GDEY042Z98 use SSD1683 OTP waveforms unlike
+    // the smaller SSD1680 panel, so keep their existing LUT path separate
+    const IS_SSD1683: bool = WIDTH == 400 && HEIGHT == 300;
+    const IS_TRICOLOR: bool = C::BUFFER_COUNT == 2;
 
     /// Create a new display driver.
     ///
@@ -114,7 +118,9 @@ where
             .await?;
         self.command_with_data(
             command::BORDER_WAVEFORM_CONTROL,
-            &[if Self::IS_SSD1683 {
+            &[if Self::IS_SSD1683 && Self::IS_TRICOLOR {
+                0x05
+            } else if Self::IS_SSD1683 {
                 0x01
             } else {
                 flag::BORDER_WAVEFORM_FOLLOW_LUT | flag::BORDER_WAVEFORM_LUT1
@@ -234,7 +240,12 @@ where
             self.use_full_frame().await?;
         }
 
-        self.command_with_data(command::DISPLAY_UPDATE_CONTROL, &[0x40, 0x00])
+        let update_control = match (Self::IS_TRICOLOR, Self::IS_SSD1683) {
+            (false, _) => [0x40, 0x00],
+            (true, true) => [0x00, 0x00],
+            (true, false) => [0x00, 0x80],
+        };
+        self.command_with_data(command::DISPLAY_UPDATE_CONTROL, &update_control)
             .await?;
 
         self.command_with_data(command::UPDATE_DISPLAY_CTRL2, &[flag::DISPLAY_MODE_1])
@@ -298,7 +309,7 @@ where
     /// interrupted update, or an unknown reset. Use `init()` in those cases.
     /// Other panels reject this operation without changing driver state.
     pub async fn resume_retained(&mut self) -> Result<()> {
-        if !Self::IS_SSD1683 {
+        if !Self::IS_SSD1683 || Self::IS_TRICOLOR {
             return Err(display_interface::DisplayError::InvalidFormatError);
         }
         self.init().await?;
@@ -593,6 +604,69 @@ where
         display: &Display<WIDTH, HEIGHT, BUFFER_SIZE, TriColor>,
     ) -> Result<()> {
         self.full_update_from_buffer(display.bw_buffer(), display.red_buffer())
+            .await
+    }
+
+    /// Start a faster full refresh of the 4.2-inch tri-color display.
+    ///
+    /// Based on GxEPD2's _use_fast_update for the GDEY042Z98, it loads the controller's
+    /// high-temperature waveform, which is shorter than the normal one. Red look less saturated, or
+    /// a bit darker, but the refresh time is about half. The next [`Self::full_refresh`] reads the
+    /// real temperature again.
+    pub async fn fast_full_refresh(&mut self) -> Result<()> {
+        if !Self::IS_SSD1683 {
+            return Err(display_interface::DisplayError::InvalidFormatError);
+        }
+        self.initial_full_refresh_done = false;
+        self.using_partial_mode = false;
+        self.use_full_frame().await?;
+
+        self.command_with_data(command::DISPLAY_UPDATE_CONTROL, &[0x00, 0x00])
+            .await?;
+        self.command_with_data(command::WRITE_TEMP_REGISTER, &[0x5a, 0x00])
+            .await?;
+        self.command_with_data(command::UPDATE_DISPLAY_CTRL2, &[0x91])
+            .await?;
+        self.command(command::MASTER_ACTIVATE).await?;
+        self.delay.delay_ms(2).await;
+        self.wait_until_idle().await;
+
+        self.command_with_data(command::UPDATE_DISPLAY_CTRL2, &[0xc7])
+            .await?;
+        self.command(command::MASTER_ACTIVATE).await?;
+        self.delay.delay_ms(1).await;
+        self.wait_until_idle().await;
+        self.initial_full_refresh_done = true;
+        Ok(())
+    }
+
+    /// Update the screen with the provided full frame buffers using a fast full refresh.
+    ///
+    /// See [`Self::fast_full_refresh`].
+    pub async fn fast_full_update_from_buffer(
+        &mut self,
+        bw_buffer: &[u8],
+        red_buffer: &[u8],
+    ) -> Result<()> {
+        if !Self::IS_SSD1683 {
+            return Err(display_interface::DisplayError::InvalidFormatError);
+        }
+        self.write_red_buffer(red_buffer).await?;
+        self.write_bw_buffer(bw_buffer).await?;
+        self.fast_full_refresh().await?;
+        Ok(())
+    }
+
+    /// Update the screen with the provided [`Display`] using a fast full refresh.
+    ///
+    /// See [`Self::fast_full_refresh`].
+    #[cfg_attr(docsrs, doc(cfg(feature = "graphics")))]
+    #[cfg(feature = "graphics")]
+    pub async fn fast_full_update<const BUFFER_SIZE: usize>(
+        &mut self,
+        display: &Display<WIDTH, HEIGHT, BUFFER_SIZE, TriColor>,
+    ) -> Result<()> {
+        self.fast_full_update_from_buffer(display.bw_buffer(), display.red_buffer())
             .await
     }
 
