@@ -13,7 +13,10 @@ use embedded_hal::{
     digital::{ErrorType, InputPin, OutputPin},
 };
 use std::{cell::RefCell, rc::Rc};
-use weact_studio_epd::{WeActStudio290BlackWhiteDriver, WeActStudio420BlackWhiteDriver};
+use weact_studio_epd::{
+    WeActStudio290BlackWhiteDriver, WeActStudio290TriColorDriver, WeActStudio420BlackWhiteDriver,
+    WeActStudio420TriColorDriver,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 enum Event {
@@ -273,6 +276,107 @@ fn smaller_panel_still_loads_its_partial_lut() {
     assert_eq!(writes(&t, 0x32).len(), 1);
     run(d.fast_update_from_buffer(&[0xff; 4736])).unwrap();
     assert_eq!(writes(&t, 0x32).len(), 1);
+}
+
+#[test]
+fn ssd1683_tricolor_init_and_full_refresh_keep_red_ram() {
+    let t = Trace::default();
+    let mut d = WeActStudio420TriColorDriver::new(
+        Interface(t.clone()),
+        Pin(t.clone()),
+        Pin(t.clone()),
+        Delay(t.clone()),
+    );
+    run(d.init()).unwrap();
+    assert_eq!(writes(&t, 0x01), vec![vec![0x2b, 0x01, 0x00]]);
+    assert_eq!(writes(&t, 0x3c), vec![vec![0x05]]);
+    assert!(writes(&t, 0x21).is_empty());
+    t.borrow_mut().clear();
+    let bw = [0xff; 15000];
+    let red = [0x0f; 15000];
+    run(d.full_update_from_buffer(&bw, &red)).unwrap();
+    assert!(!commands(&t).contains(&0x32), "SSD1683 must use OTP LUT");
+    assert_eq!(writes(&t, 0x24), vec![bw.to_vec()]);
+    assert_eq!(writes(&t, 0x26), vec![red.to_vec()]);
+    assert_eq!(writes(&t, 0x44).last(), Some(&vec![0, 49]));
+    assert_eq!(writes(&t, 0x45).last(), Some(&vec![0, 0, 0x2b, 1]));
+    assert_eq!(writes(&t, 0x21), vec![vec![0x00, 0x00]]);
+    assert_eq!(writes(&t, 0x22), vec![vec![0xf7]]);
+    assert_busy_margin(&t);
+    t.borrow_mut().clear();
+    run(d.sleep()).unwrap();
+    assert_eq!(writes(&t, 0x22), vec![vec![0x83]]);
+    assert_eq!(writes(&t, 0x10), vec![vec![1]]);
+    assert!(run(d.resume_retained()).is_err());
+}
+
+#[test]
+fn ssd1683_tricolor_fast_full_refresh_loads_high_temperature_waveform() {
+    let t = Trace::default();
+    let mut d = WeActStudio420TriColorDriver::new(
+        Interface(t.clone()),
+        Pin(t.clone()),
+        Pin(t.clone()),
+        Delay(t.clone()),
+    );
+    run(d.init()).unwrap();
+    t.borrow_mut().clear();
+    let bw = [0xff; 15000];
+    let red = [0x0f; 15000];
+    run(d.fast_full_update_from_buffer(&bw, &red)).unwrap();
+    assert_eq!(writes(&t, 0x24), vec![bw.to_vec()]);
+    assert_eq!(writes(&t, 0x26), vec![red.to_vec()]);
+    assert_eq!(writes(&t, 0x44).last(), Some(&vec![0, 49]));
+    assert_eq!(writes(&t, 0x21), vec![vec![0x00, 0x00]]);
+    assert_eq!(writes(&t, 0x1a), vec![vec![0x5a, 0x00]]);
+    assert_eq!(writes(&t, 0x22), vec![vec![0x91], vec![0xc7]]);
+    let events = t.borrow();
+    let activations: Vec<usize> = events
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| (*e == Event::Command(0x20)).then_some(i))
+        .collect();
+    assert_eq!(activations.len(), 2);
+    assert_eq!(events[activations[0] + 1], Event::Delay(2_000_000));
+    assert_eq!(events[activations[1] + 1], Event::Delay(1_000_000));
+    for i in activations {
+        assert_eq!(events[i + 2], Event::Idle);
+    }
+    drop(events);
+    t.borrow_mut().clear();
+    run(d.full_update_from_buffer(&bw, &red)).unwrap();
+    assert_eq!(writes(&t, 0x22), vec![vec![0xf7]]);
+    assert!(writes(&t, 0x1a).is_empty());
+}
+
+#[test]
+fn ssd1680_tricolor_rejects_fast_full_refresh() {
+    let t = Trace::default();
+    let mut d = WeActStudio290TriColorDriver::new(
+        Interface(t.clone()),
+        Pin(t.clone()),
+        Pin(t.clone()),
+        Delay(t.clone()),
+    );
+    run(d.init()).unwrap();
+    t.borrow_mut().clear();
+    assert!(run(d.fast_full_update_from_buffer(&[0xff; 4736], &[0x00; 4736])).is_err());
+    assert!(t.borrow().is_empty());
+}
+
+#[test]
+fn ssd1680_tricolor_full_refresh_keeps_red_ram() {
+    let t = Trace::default();
+    let mut d = WeActStudio290TriColorDriver::new(
+        Interface(t.clone()),
+        Pin(t.clone()),
+        Pin(t.clone()),
+        Delay(t.clone()),
+    );
+    run(d.init()).unwrap();
+    t.borrow_mut().clear();
+    run(d.full_update_from_buffer(&[0xff; 4736], &[0x00; 4736])).unwrap();
+    assert_eq!(writes(&t, 0x21), vec![vec![0x00, 0x80]]);
 }
 
 #[test]
