@@ -16,7 +16,7 @@ By default this driver uses `async`. If you prefer to use a blocking API instead
 | WeAct 2.9 inch 128x296 B/W | Black, White | ✓ | ✓ | ✓ | ✓ |
 | WeAct 2.9 inch 128x296 B/W/R | Black, White, Red | ✓ |  | ✕ | ✓ |
 | WeAct 4.2 inch 400x300 B/W | Black, White | ✓ | ✓ | ✓ | ✓ |
-| WeAct 4.2 inch 400x300 B/W/R | Black, White, Red | ✓ |  | ✕[^3] |  |
+| WeAct 4.2 inch 400x300 B/W/R | Black, White, Red | ✓ |  | ✕[^3] | ✓ |
 
 [^1]: Allows updating part of the screen buffer to save IO time and potentially memory.
 
